@@ -1,8 +1,12 @@
-// SentinelQA v0.3.0 - URL-level + page-level security checks
+// SentinelQA v0.3.0 - URL-level + page-level + security header checks
 
 const SUSPICIOUS_TLDS = ["tk", "ml", "ga", "cf", "gq", "xyz", "top", "buzz", "click", "loan", "icu", "cam"];
 const KEYWORDS = ["login", "signin", "verify", "verification", "account", "update", "secure",
                   "confirm", "password", "banking", "wallet", "unlock", "suspended", "invoice", "webscr"];
+
+function isLocalHost(h) {
+  return h === "localhost" || h.endsWith(".localhost") || h === "127.0.0.1" || h === "[::1]";
+}
 
 function gradeOf(score) {
   if (score < 10)      return ["A", "Looks secure"];
@@ -16,14 +20,16 @@ function checkUrl(urlString) {
   const url = new URL(urlString);
   const hostname = url.hostname.toLowerCase();
   const full = urlString.toLowerCase();
+  const local = isLocalHost(hostname);
   let score = 0;
   const findings = [];
 
-  if (url.protocol !== "https:") {
+  // Local dev servers (localhost / 127.0.0.1) are exempt from the transport/IP checks.
+  if (url.protocol !== "https:" && !local) {
     score += 25;
     findings.push("No HTTPS - the connection to this site is not encrypted. Anyone on the network can read what you send.");
   }
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
+  if (!local && /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
     score += 30;
     findings.push("The site uses a raw IP address instead of a domain name. Legitimate services almost never do this.");
   }
@@ -40,7 +46,7 @@ function checkUrl(urlString) {
     score += 15;
     findings.push("The ." + tld + " domain extension is free/cheap and is abused in a large share of phishing sites.");
   }
-  if (/\d/.test(hostname.replace(/\./g, ""))) {
+  if (!local && /\d/.test(hostname.replace(/\./g, ""))) {
     score += 5;
     findings.push("Digits in the domain name (e.g. 'paypa1') - sometimes used to imitate real brands.");
   }
@@ -59,6 +65,12 @@ function checkUrl(urlString) {
   return { score, grade, label, findings, hostname };
 }
 
+function applyGrade(result) {
+  const [g, l] = gradeOf(result.score);
+  result.grade = g;
+  result.label = l;
+}
+
 function render(result) {
   const gradeEl = document.getElementById("grade");
   gradeEl.textContent = result.grade;
@@ -71,6 +83,13 @@ function render(result) {
     "<li>&#10004;&#65039; No issues found at URL or page level.</li>";
 }
 
+const HEADER_NAMES = {
+  "x-frame-options": "X-Frame-Options (clickjacking protection)",
+  "content-security-policy": "Content-Security-Policy (injection protection)",
+  "x-content-type-options": "X-Content-Type-Options (MIME-sniffing protection)",
+  "strict-transport-security": "Strict-Transport-Security (forces HTTPS)"
+};
+
 async function scan() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.url || !tab.url.startsWith("http")) {
@@ -80,14 +99,25 @@ async function scan() {
 
   const result = checkUrl(tab.url);
 
-  // NEW: merge in what content.js found inside the page
-  const stored = await chrome.storage.local.get(["pageFindings", "pageChecked"]);
-  if (stored.pageChecked === result.hostname && stored.pageFindings.length > 0) {
-    result.findings.push(...stored.pageFindings);
-    result.score = Math.min(result.score + 35 * stored.pageFindings.length, 100);
-    const [g, l] = gradeOf(result.score);
-    result.grade = g;
-    result.label = l;
+  // Per-tab record written by background.js (headers) and content.js (page checks)
+  const key = "tab_" + tab.id;
+  const stored = await chrome.storage.session.get(key);
+  const record = stored[key];
+
+  if (record && record.hostname === result.hostname) {
+    const pageFindings = record.pageFindings || [];
+    if (pageFindings.length > 0) {
+      result.findings.push(...pageFindings);
+      result.score = Math.min(result.score + 35 * pageFindings.length, 100);
+    }
+
+    const missing = record.headersMissing || [];
+    if (missing.length > 0) {
+      const pretty = missing.map(h => HEADER_NAMES[h]).join(", ");
+      result.findings.push("Missing security headers: " + pretty + ".");
+      result.score = Math.min(result.score + 8 * missing.length, 100);
+    }
+    applyGrade(result);
   }
 
   render(result);
