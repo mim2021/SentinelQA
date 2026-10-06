@@ -3,7 +3,11 @@
   "name": "SentinelQA",
   "version": "0.3.0",
   "description": "Runs automated security health-checks on websites and shows a report card.",
-  "permissions": ["storage", "activeTab", "tabs"],
+  "permissions": ["storage", "activeTab", "tabs", "webRequest"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

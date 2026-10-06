@@ -4,12 +4,18 @@
 (function () {
   const findings = [];
 
+  function isLocalHost(h) {
+    return h === "localhost" || h.endsWith(".localhost") || h === "127.0.0.1" || h === "[::1]";
+  }
+
   // Check 9: Password field sending data over HTTP
   const passwordFields = document.querySelectorAll("input[type='password']");
   passwordFields.forEach(function (field) {
     const form = field.closest("form");
     const action = form ? form.action : location.href;
-    if (action.startsWith("http://")) {
+    let local = false;
+    try { local = isLocalHost(new URL(action).hostname); } catch (e) {}
+    if (action.startsWith("http://") && !local) {
       findings.push("CRITICAL: this page has a PASSWORD field that submits over unencrypted HTTP. Anyone on the network can read the password.");
     }
   });
@@ -22,6 +28,6 @@
     }
   }
 
-  // Save the results where the popup can find them
-  chrome.storage.local.set({ pageFindings: findings, pageChecked: location.hostname });
+  // Hand the results to the background script, which stores them for THIS tab
+  chrome.runtime.sendMessage({ type: "PAGE_FINDINGS", hostname: location.hostname, findings: findings });
 })();
