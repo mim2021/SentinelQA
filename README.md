@@ -1,152 +1,195 @@
 # SentinelQA + TrustGuard
 
-A layered anti-phishing toolkit built from a real account-takeover incident:
+Three small tools that work together against one kind of attack: a trusted colleague's account
+gets hijacked and starts sending scam links to everyone they know.
 
-- **SentinelQA** — a Chrome (MV3) extension that audits the page you are on and grades it A–F.
-- **netguard** — a small command-line check for the public-Wi-Fi stage: router swapped (evil
-  twin), DNS redirected, certificates rejected.
-- **TrustGuard** — a chat bot (Discord and Slack adapters on one shared engine) that detects
-  messages sent from *compromised but trusted* accounts and re-verifies people who rejoin.
+- **SentinelQA**: a Chrome extension. Click its icon on any page and it grades the site A to F,
+  with a plain-English reason for every point it takes off.
+- **NetGuard**: a Wi-Fi checker you can double-click. It looks for signs that the network you're
+  on is intercepting your traffic.
+- **TrustGuard**: a chat bot. It spots scam messages, even when they come from a real colleague's
+  account, and stops a removed attacker from quietly coming back.
 
 ![SentinelQA grading the real Steam store A, the incident's fake Steam gift-card login page F, and a rejected certificate F](docs/demo.gif)
 
-It started with a QA engineer's question — "we test functionality all day, who tests security?" —
-and grew after a phishing incident showed why URL checking alone is not enough.
+It started with a QA engineer's question: *"We test functionality all day. Who tests security?"*
+Then a real phishing incident showed why checking links alone isn't enough.
 
-## Incident-driven design
+## The story behind it
 
-A colleague's chat account was hijacked, most likely through a session or credential theft on
-public Wi-Fi days earlier. The attacker messaged everyone on the account's friend list with a
-short, greeting-less "$50 Steam gift" link to a look-alike Steam domain. Because the sender was a
-known colleague, several people clicked and entered their credentials on the fake page, and the
-compromise spread to their email and other accounts that reused the password. One recipient
-openly questioned the message but trust still won. After the account was removed from the work
-server, the attacker came back with a *new* account and was let in, because nothing asked who
-they were.
+A colleague's chat account was hijacked, most likely after their login was stolen on public Wi-Fi
+a few days earlier. The attacker messaged everyone on their friend list with a short, greeting-less
+"$50 Steam gift" link to a fake Steam site. Because the message came from someone they knew,
+several people clicked and typed in their passwords. Anyone who reused that password lost other
+accounts too. One person even asked "what is this?", but trust still won.
 
-Traditional filters fail here because the sender was legitimate. Detection has to be behavioural
-and contextual, at every stage of the chain:
+When the account was finally removed from the work server, the attacker simply came back with a
+*new* account. Nothing asked who they were.
 
-| Attack stage | What happened | What catches it | Where |
+Spam filters miss this, because the sender is real. So each tool here covers a different moment
+of the attack:
+
+| Moment in the attack | What happened | What catches it | Which tool |
 |---|---|---|---|
-| Network | Credentials/session stolen on open Wi-Fi | Certificate/TLS error capture; DNS-over-HTTPS cross-check of the server IP; router hardware-address change on a known network | Extension (`background.js`, `lib/netchecks.js`) + netguard |
-| Spread | Hijacked account mass-messages a lure | Message scoring (money lure + external link + no greeting + brand look-alike + masked link), same-message burst detection, multi-reporter escalation | TrustGuard core |
-| Lure link | `steamcommunnity.com/gift-card/pay/50`-style URL | Brand look-alike / brand-in-domain detection, lure words, new-domain age (RDAP), optional Safe Browsing | Extension (`lib/core.js`) + TrustGuard |
-| Credential harvest | Fake Steam sign-in page | Password form whose title/heading claims a brand the domain does not own | Extension (`content.js`) |
-| Re-infiltration | Attacker rejoins with a new account | Re-verification: held joins for removed IDs, look-alike names, very new accounts, post-compromise lockdown | TrustGuard core + adapters |
+| On the network | Login stolen on open Wi-Fi | Certificate errors, DNS answers that don't match a trusted resolver, a swapped router | SentinelQA + NetGuard |
+| The scam spreads | Hijacked account mass-messages a lure | Message scoring (money words, external link, no greeting, look-alike brand, disguised link), same message sent to many people, reports from several recipients | TrustGuard |
+| The link | `steamcommunnity.com/gift-card/pay/50` | Look-alike and brand-in-domain detection, very new domains, optional Google Safe Browsing | SentinelQA + TrustGuard |
+| The fake login page | A Steam-looking sign-in form | A password form claiming to be a brand the site doesn't belong to | SentinelQA |
+| The attacker returns | New account, same person | Joins held for removed accounts, look-alike names, brand-new accounts, and during a lockdown | TrustGuard |
 
-## Repository layout
+## What's done and tested
 
-```
-manifest.json, background.js, content.js, popup.*, options.*   Chrome extension
-lib/core.js         pure detection + scoring logic (shared by popup, content script, service worker, tests)
-lib/netchecks.js    online lookups (RDAP, DoH, Safe Browsing) - popup only
-lib/rules.js        GENERATED brand/TLD/look-alike data (from shared/rules.json)
-shared/rules.json   the one rule set used by the extension and the bot (npm run build:rules)
-tests/              Node unit tests for lib/core.js + rule-copy parity
-netguard/           Python CLI: passive public-Wi-Fi interception checks + tests
-trustguard/         Python package: platform-neutral engine + Discord/Slack adapters + tests
-docs/case-study.md  technical write-up (PDF: docs/case-study.pdf, rebuilt by scripts/build-writeup-pdf.py)
-docs/rollout-guide.md  office rollout: what is checked, what data is (not) collected, admin runbook
-docs/demo.md        how to record the demo GIF
-CHANGELOG.md        release notes, each feature tied to an incident stage
-```
+Version **1.1.0** (extension 0.5.0, bot 1.1.0, NetGuard 0.1.0). Everything below was tested by
+hand on Windows in November 2026, on top of 83 automated tests.
 
-## SentinelQA extension
+**SentinelQA extension**, tested in Chrome
+- Grades pages A–F and lists the reason for every point.
+- Caught the fake Steam login page (F), a site with a bad certificate (F), and graded a normal
+  site fairly (C, for missing security headers only).
+- Browser pages like the new tab show a grey **?** instead of a grade.
+- The grade stays pinned at the top while you scroll a long list of findings.
+- An **Online checks** line shows whether the online lookups ran and what they found, or that
+  they're switched off.
+- Re-scan works three times per page load, then offers a page refresh.
 
-**URL level** — HTTPS, raw-IP host, `@` trick, punycode, abused TLDs, digits in domain, pressure
-keywords, URL length, **brand look-alike domains** (`paypa1.com`, `steamcommunnity.com`),
-**brand names in unrelated domains** (`steam-gift.xyz`), **brand + reward-lure combination**.
+**NetGuard Wi-Fi checker**, tested on a home network
+- Runs from a terminal, prints JSON with `--json`, or runs on a double-click with no setup.
+- Remembers your router per network and warns if it changes.
+- A DNS difference on its own is now shown as a note. Big services like Slack hand out different
+  servers to different resolvers, which caused a false WARNING during testing.
 
-**Page level** — password field submitting over HTTP, mixed content, **fake login page**
-(password form presenting itself as a brand the domain does not belong to).
+**TrustGuard bot**, tested live on a Discord test server
+- Normal messages are left alone.
+- Scam links are deleted, the channel gets a warning, and moderators get an alert with every link
+  made unclickable (`steamcommunnity[.]com`).
+- Disguised links (the text says one site, the link opens another) are caught.
+- Editing an innocent message into a scam gets caught too.
+- DMing a suspicious message to the bot gets a verdict back with the reasons.
+- `python -m trustguard.demo incident` replays the whole incident offline, no chat app needed.
 
-**Transport** — missing security headers (X-Frame-Options, CSP, X-Content-Type-Options, HSTS),
-**certificate/TLS errors** (`ERR_CERT_*`, `ERR_SSL_*` — kept on the report even if you click
-through the warning), **redirect chains** across several domains.
+## Try it yourself
 
-**Online checks** (run only from the popup, only for the site you scan; can be turned off in
-Settings) — domain registration age via rdap.org, server IP cross-checked against Cloudflare
-DNS-over-HTTPS, and Google Safe Browsing if you add your own API key.
+You'll need Chrome, Node 18+ and Python 3.10+. All commands run from this folder.
 
-Privacy note: each online check sends the scanned hostname (Safe Browsing: the full URL) to that
-provider. Nothing is sent on ordinary browsing. The DoH check is a weak signal: CDNs and geo-DNS
-legitimately return different IPs, so it only adds 10 points.
-
-What it cannot see: the extension observes HTTP(S) requests and page content only. It has no
-packet-level visibility and does not detect ARP spoofing or rogue access points directly; it
-detects their usual *symptoms* (certificate errors, DNS mismatches).
-
-### Install (developer mode)
-1. Open `chrome://extensions`, turn on **Developer mode**
-2. **Load unpacked** and select this folder
-3. Click the SentinelQA icon on any website
-
-### Try it
-- `google.com` → A
-- `neverssl.com` → B/C (no HTTPS, missing headers)
-- `localhost:8000/test.html` → password-over-HTTP warning
-- `test-fake-login.html` served from a non-localhost name → fake Steam login warning
-- `https://expired.badssl.com` / `https://self-signed.badssl.com` → certificate error, grade F
-
-### Tests
+**Run the tests**
 ```bash
 npm test
 ```
-
-After editing brands, TLDs or look-alike pairs in `shared/rules.json`:
 ```bash
-npm run build:rules
+cd trustguard; python -m unittest discover -s tests; cd ..
+```
+```bash
+cd netguard; python -m unittest discover -s tests; cd ..
 ```
 
-## TrustGuard bot
+In Windows PowerShell, if `npm` says "running scripts is disabled", type `npm.cmd test` instead.
+You don't need to change any Windows security settings. The bot's Discord and Slack tests are
+skipped unless you install it with `pip install -e "trustguard[slack,discord]"`.
 
-See [trustguard/README.md](trustguard/README.md); to try it live in a test workspace,
-[docs/pilot-guide.md](docs/pilot-guide.md); for deploying it to a team,
-[docs/rollout-guide.md](docs/rollout-guide.md). One engine, thin adapters:
+**Load the extension**
+1. Open `chrome://extensions` and switch on **Developer mode** (top right).
+2. Click **Load unpacked** and choose this folder.
+3. Pin the icon, open any website and click it.
 
-| Platform | Status | What the bot can see |
-|---|---|---|
-| Discord | Adapter implemented | Server channels it can read (Message Content intent) and DMs sent **to the bot**. Bots **cannot** read private user-to-user DMs, so DM phishing is handled by users forwarding suspicious DMs to the bot; independent reports against one sender escalate to moderators. |
-| Slack | Adapter implemented; **the office deployment** | Channels it is invited to and DMs to the bot. Colleagues report private DMs with *Share message*. Moderator commands, edit re-scoring, deactivation tracking and channel-join re-verification (including Slack Connect guests). Bot tokens cannot delete other users' messages, so "quarantine" is a threaded warning plus a moderator alert for an admin to act on. One-step install from [`slack-app-manifest.yml`](trustguard/slack-app-manifest.yml). |
-| Teams | Future work | Bot Framework; enterprise angle. |
-| Telegram | Out of scope | Bots only see messages sent to them or in groups they're in. |
-| WhatsApp | Out of scope | Closed Business API. |
+To see it catch the fake login page, serve this folder with
+`python -m http.server 8000 --bind 127.0.0.1`, then open
+`http://steam-gift-card.127.0.0.1.nip.io:8000/test-fake-login.html`. The address resolves to your
+own machine, so nothing leaves your computer. `https://self-signed.badssl.com` shows the
+certificate check.
 
-The extension is the platform-agnostic layer (it protects links from any chat app opened in the
-browser); the bot adapters protect where they are invited.
+**Check your Wi-Fi**: double-click `netguard.cmd`, or run `.\netguard.cmd` in a terminal.
 
-## Known limitations and future work
+**Try the bot without any chat app**
+From the `trustguard` folder:
+```bash
+python -m trustguard.demo
+```
+Type a message and press Enter to see its verdict. An empty line quits.
 
-Every check here is an explainable heuristic: each grade or verdict lists the signals and points
-behind it. That makes the tools auditable and easy to tune, and it also defines where they stop.
+To run the bot live on Discord, follow [docs/pilot-guide.md](docs/pilot-guide.md). Use a test
+server, and keep the bot token in `trustguard/.env` (git ignores it). Don't paste the token into
+chats or screenshots. If it ever leaks, click **Reset Token** in the Discord developer portal.
 
-| Area | Current limitation | Future direction |
-|---|---|---|
-| Risk scoring | Fixed point weights; no handling of evasion, class imbalance or false-positive tuning; precision/recall on real traffic unmeasured | ML-based scoring with evasion testing, evaluated on labelled data |
-| Bot anomaly detection | Keyword and rate rules; an attacker who knows them can write around them (add a greeting, avoid lure words) | Statistical, per-sender baselines; a formal threat model |
-| Token theft on public Wi-Fi | Extension and netguard detect symptoms (certificate errors, DNS redirection, router change), not the theft itself | Deeper protocol-level analysis of session handling |
-| Fake login detection | Brand list + password-form heuristics | Auth-flow analysis (OAuth/SAML failure modes) |
-| Re-verification | Admin approval after an out-of-band check; practical, not formally designed | Formal access control / zero-trust identity assurance |
-| User behaviour | People click despite doubt (one recipient in the incident asked "what is this?" and the chain still spread) | Warning UX design and evaluation |
-| Platform reach | Bots cannot read private user-to-user DMs on Discord or Slack; DM phishing relies on users reporting | Teams adapter; client-side (extension) coverage of chat web apps |
+## What stays private
 
-## Roadmap
-- [x] Page-level checks: insecure forms, mixed content
-- [x] Security headers
-- [x] Shared detection core + unit tests + CI
-- [x] One rule set for every layer (`shared/rules.json`), stale copies fail CI
-- [x] Network companion ([netguard](netguard/README.md)): router change, DNS redirection, certificate errors
-- [x] Brand impersonation and fake-login detection
-- [x] TLS error capture, redirect chains, domain age, DoH cross-check, Safe Browsing
-- [x] TrustGuard engine, Discord and Slack adapters
-- [x] Technical write-up ([Markdown](docs/case-study.md) / [PDF](docs/case-study.pdf)) and release notes
-- [x] Persist TrustGuard re-verification state (SQLite, no message content) across restarts
-- [x] Office rollout guide ([docs/rollout-guide.md](docs/rollout-guide.md))
-- [x] Demo GIF ([docs/demo.gif](docs/demo.gif))
-- [ ] Optional Python language tool (message-language analysis for non-English lures)
-- [ ] Teams adapter
-- [ ] ML-based scoring with evasion robustness (current scoring is explainable heuristics)
+- **Extension:** results live in your browser and are cleared when the tab closes. When
+  **Online checks** is on (it is by default), the popup sends the scanned site's host name to
+  rdap.org (domain age) and Cloudflare DNS (address check), and the full URL to Google Safe
+  Browsing if you add your own key. Nothing is sent while you browse normally, only when you open
+  the popup. You can switch this off in the extension's Settings.
+- **NetGuard:** stores a hashed network name and your router's hardware address. It doesn't scan
+  your network or record traffic.
+- **Bot:** never stores message text. With `TRUSTGUARD_STATE_PATH` set, it keeps removed-account
+  IDs, names and approvals in a small local database.
+
+More detail for an office rollout is in [docs/rollout-guide.md](docs/rollout-guide.md).
+
+## What's next
+
+**Slack: the next big step.** The office runs on Slack, and the Slack version of the bot is
+already built. It has moderator commands, re-scoring of edited messages, reporting with *Share
+message*, and re-verification when someone joins a channel. Its automated tests use a fake Slack
+client, but it hasn't been tried in a real workspace yet. The plan:
+
+1. Run the 11-step Slack test in [docs/pilot-guide.md](docs/pilot-guide.md) in a separate test
+   workspace.
+2. Fix whatever that turns up.
+3. Pilot in warn-only mode (raise `TRUSTGUARD_QUARANTINE_AT`) before turning on quarantine.
+
+A Slack bot can't delete other people's messages, so on Slack "quarantine" means a threaded
+warning plus an alert for an admin to act on.
+
+**Before the office rollout**
+- Decide whether **Online checks** should start switched off, or get rdap.org and Cloudflare
+  approved as services that receive scanned host names. Whoever owns privacy should make that
+  call.
+
+**Later**
+- A Microsoft Teams adapter.
+- Language checks for scam messages that aren't in English.
+- Smarter scoring that's harder to write around. The current rules are deliberately simple and
+  explainable.
+
+## Honest limits
+
+Every check here is a simple, explainable rule: each grade or verdict shows exactly which signals
+added points. That makes the tools easy to audit and tune. It also means:
+
+- **The rules can be dodged.** An attacker who knows them can add a greeting or avoid money
+  words. The scores are tuned on a small set of made-up examples, and nobody has measured accuracy
+  on real traffic yet.
+- **Bots can't read private DMs** between two people, on Discord or Slack. DM scams are caught only
+  when someone forwards them to the bot.
+- **Network attacks are spotted by their symptoms** (certificate errors, redirected DNS, a changed
+  router), not by watching the attack itself.
+- **People still click.** In the incident, someone doubted the message and the scam spread anyway.
+  Good warnings matter as much as good detection.
+- **Some test addresses look odd.** The nip.io test page also gets a "digits in the domain"
+  finding, because its name contains `127.0.0.1`.
+
+## What's in this folder
+
+```
+manifest.json, background.js, content.js,
+popup.*, options.*        the Chrome extension
+lib/core.js               detection and scoring (shared by popup, content script and tests)
+lib/netchecks.js          online lookups (domain age, DNS check, Safe Browsing), popup only
+lib/rules.js              generated from shared/rules.json, don't edit by hand
+shared/rules.json         the one rule set used by the extension and the bot
+tests/                    extension tests (npm test)
+netguard/, netguard.cmd   the Wi-Fi checker and its tests
+trustguard/               the bot: shared engine, Discord and Slack adapters, tests, offline demo
+docs/                     pilot guide, rollout guide, case study (Markdown and PDF), demo GIF
+CHANGELOG.md              what changed in each release, and why
+```
+
+After editing brands or look-alike domains in `shared/rules.json`, run `npm run build:rules` to
+regenerate the copies. A test fails if they drift apart.
+
+For the details: [trustguard/README.md](trustguard/README.md),
+[netguard/README.md](netguard/README.md), and the full write-up in
+[docs/case-study.md](docs/case-study.md).
 
 ## License
+
 MIT
