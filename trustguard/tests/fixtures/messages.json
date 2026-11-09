@@ -1,0 +1,19 @@
+{
+  "_note": "Fictional, anonymized messages modelled on the incident pattern. No real users, links or data.",
+  "phishing": [
+    "steamcommunnity.com/gift-card/pay/50",
+    "https://steamcommunnity.com/gift-card/pay/50 take it fast",
+    "$50 steam gift for you https://steam-giftcard.xyz/claim",
+    "free nitro for 3 months, claim before it expires https://dlscord-nitro.gift/claim",
+    "@everyone giveaway https://bit.ly/3xAmpl3 first come first served",
+    "check this https://paypa1-secure.com/verify $100 bonus"
+  ],
+  "benign": [
+    "hey, standup moved to 10:30 today",
+    "Hi team, the release notes are here: https://docs.example-internal.com/release/42",
+    "can someone review my MR when you get a chance?",
+    "lol that build failed again",
+    "Hello! Steam summer sale starts tomorrow, anyone want to split a bundle?",
+    "the invoice template is in the shared drive"
+  ]
+}

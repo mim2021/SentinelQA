@@ -1,0 +1,44 @@
+# Slack app manifest for TrustGuard. Create the app at https://api.slack.com/apps
+# -> "Create New App" -> "From an app manifest" -> paste this file.
+# Then: Basic Information -> App-Level Tokens -> generate one with connections:write (SLACK_APP_TOKEN);
+# Install App -> copy the Bot User OAuth Token (SLACK_BOT_TOKEN). Keep both in 1Password.
+#
+# Scopes are the minimum the adapter uses. users:read.email is deliberately NOT requested.
+# Optional, only if TRUSTGUARD_SLACK_REMOVE_HELD=1: add channels:manage and groups:write so the
+# bot can remove a held person from protected channels.
+display_information:
+  name: TrustGuard
+  description: Flags phishing sent from compromised-but-trusted accounts and re-verifies returning members.
+  background_color: "#111827"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true              # people DM / share suspicious messages to the bot
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: TrustGuard
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - channels:history     # read messages in public channels the bot is added to
+      - groups:history       # ... and private channels it is added to
+      - im:history           # reports DMed to the bot
+      - channels:read        # member_joined_channel in public channels
+      - groups:read          # member_joined_channel in private channels
+      - chat:write           # warnings, report verdicts, moderator alerts
+      - users:read           # names for look-alike matching, admin check, deactivations
+settings:
+  event_subscriptions:
+    bot_events:
+      - message.channels
+      - message.groups
+      - message.im
+      - member_joined_channel
+      - team_join
+      - user_change
+  interactivity:
+    is_enabled: false
+  org_deploy_enabled: false
+  socket_mode_enabled: true                 # no public HTTP endpoint needed
+  token_rotation_enabled: false

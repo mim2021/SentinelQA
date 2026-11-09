@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>SentinelQA settings</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 560px; margin: 24px auto; padding: 0 16px; color: #111827; }
+    label { display: block; margin: 14px 0 4px; font-weight: bold; }
+    p { font-size: 13px; color: #4b5563; }
+    input[type=text] { width: 100%; padding: 6px; box-sizing: border-box; }
+    button { margin-top: 16px; padding: 8px 14px; border: 0; border-radius: 6px; background: #111827; color: #fff; cursor: pointer; }
+    #saved { margin-left: 8px; color: #16a34a; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>SentinelQA settings</h1>
+
+  <label><input type="checkbox" id="online"> Online checks when I scan a page</label>
+  <p>Looks up the scanned domain's registration date (rdap.org) and cross-checks its IP with Cloudflare
+     DNS-over-HTTPS. Only the hostname you scan is sent, only when you open the popup.</p>
+
+  <label for="sbkey">Google Safe Browsing API key (optional)</label>
+  <input type="text" id="sbkey" placeholder="leave empty to disable" autocomplete="off" spellcheck="false">
+  <p>When set, the full URL you scan is sent to Google Safe Browsing. The key is stored unencrypted in this
+     browser profile's extension storage; use a key restricted to the Safe Browsing API.</p>
+
+  <button id="save">Save</button><span id="saved"></span>
+  <script src="options.js"></script>
+</body>
+</html>

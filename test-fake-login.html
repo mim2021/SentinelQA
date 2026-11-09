@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<!-- Local test page for the fake-login check. Serve with: python -m http.server 8000
+     then open it via a non-localhost name (e.g. http://sentinel.test:8000 mapped in your hosts
+     file), since localhost is exempt from page checks. Contains no real branding assets. -->
+<head>
+  <title>Sign In - Steam Community</title>
+</head>
+<body>
+  <h1>Steam</h1>
+  <p>Sign in to claim your $50 gift card.</p>
+  <form action="/login" method="post">
+    Account name: <input type="text"><br><br>
+    Password: <input type="password"><br><br>
+    <button type="submit">Sign in</button>
+  </form>
+</body>
+</html>

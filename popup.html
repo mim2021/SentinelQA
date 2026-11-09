@@ -11,24 +11,39 @@
     .C { background: #d97706; }
     .D { background: #ea580c; }
     .F { background: #dc2626; }
+    .none { background: #9ca3af; }
     #label { text-align: center; margin-top: 6px; font-weight: bold; }
     #score { text-align: center; color: #6b7280; font-size: 12px; margin-top: 2px; }
     #site { text-align: center; font-size: 12px; color: #374151; margin: 8px 0; word-break: break-all; }
+    /* Grade stays pinned at the top while a long findings list scrolls under it */
+    #summary { position: sticky; top: 0; z-index: 1; background: #f9fafb; margin-top: -14px; padding: 14px 0 2px; border-bottom: 1px solid #e5e7eb; }
     #findings { list-style: none; padding: 0; margin: 10px 0 0; font-size: 12px; }
     #findings li { background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 8px; margin-bottom: 5px; color: #374151; }
+    #online-status { font-size: 11px; color: #374151; text-align: center; margin-top: 6px; }
+    #online-status:empty { display: none; }
     #rescan { width: 100%; margin-top: 10px; padding: 8px; border: 0; border-radius: 6px; background: #111827; color: #fff; font-weight: bold; cursor: pointer; }
+    #rescan:disabled { opacity: 0.6; cursor: wait; }
+    #rescan[data-mode="refresh"] { background: #2563eb; }
+    #rescan-status { font-size: 11px; color: #4b5563; text-align: center; margin-top: 6px; min-height: 13px; }
     #note { font-size: 10px; color: #9ca3af; text-align: center; margin-top: 8px; }
   </style>
 </head>
 <body>
-  <h1>&#128737;&#65039; SentinelQA</h1>
-  <div id="grade">?</div>
-  <div id="label">Scanning...</div>
-  <div id="score"></div>
-  <div id="site"></div>
+  <div id="summary">
+    <h1>&#128737;&#65039; SentinelQA</h1>
+    <div id="grade" class="none">?</div>
+    <div id="label">Scanning...</div>
+    <div id="score"></div>
+    <div id="site"></div>
+  </div>
   <ul id="findings"></ul>
+  <div id="online-status"></div>
   <button id="rescan">Re-scan this page</button>
-  <div id="note">v0.3.0 - URL, page-level and security header checks.</div>
+  <div id="rescan-status"></div>
+  <div id="note"><span id="version"></span> - URL, page, header, TLS and online checks. <a href="#" id="options">Settings</a></div>
+  <script src="lib/rules.js"></script>
+  <script src="lib/core.js"></script>
+  <script src="lib/netchecks.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
