@@ -1,34 +1,38 @@
 # Bot pilot guide (Slack and Discord)
 
-How to see TrustGuard working live in a **test** workspace or server. Use test accounts and
-test channels only, never real colleagues' conversations, until the rollout approvals in
-`docs/rollout-guide.md` are done.
+This guide shows you how to watch TrustGuard work live in a **test** workspace or server. Use
+test accounts and test channels only. Keep the bot away from real colleagues' conversations until
+the rollout approvals in `docs/rollout-guide.md` are done.
 
-The parts marked **(you)** need your own Slack/Discord account and create secret tokens, so they
-cannot be scripted. Everything else is ready.
+Steps marked **(you)** need your own account and create secret tokens, so they can't be
+scripted. The Discord pilot was run live in November 2026. The Slack pilot hasn't been run in a
+real workspace yet; it's the next step.
 
 ## 0. One-time setup on your computer
 
-In a terminal in the project folder:
+Open a terminal in the project folder and run these one at a time:
 
-```
+```bash
 pip install -e "trustguard[slack,discord]"
 ```
-```
+```bash
 copy trustguard\.env.example trustguard\.env
 ```
 
-`trustguard\.env` is where the bot reads its settings. It is git-ignored, so tokens put there are
-never committed. Use it for the pilot only; for the office deployment keep tokens in 1Password.
-
-If a setting is missing, the bot stops and names it, e.g.
+The bot reads its settings from `trustguard\.env`. Git ignores this file, so tokens you put there
+are never committed. Use it for the pilot only; for the office deployment, keep tokens in
+1Password. If a setting is missing, the bot stops and names it, for example
 `Missing setting(s): SLACK_BOT_TOKEN ...`.
 
----
+**Keep the token safe.** A bot token is the bot's password. Keep it only in `trustguard\.env`;
+never paste it anywhere or show it in a screenshot, and close `.env` before sharing your screen.
+If VS Code offers to inject `.env` into terminals, choose **Don't Show Again** rather than
+turning it on, and don't attach `.env` to an AI chat panel. If the token leaks, reset it
+straight away.
 
-## Slack pilot
+## Slack pilot (not yet run live)
 
-### 1. Create the app (you, ~5 minutes)
+### 1. Create the app (you, about 5 minutes)
 
 1. Go to https://api.slack.com/apps → **Create New App** → **From an app manifest**.
 2. Pick your **test** workspace, paste the contents of `trustguard/slack-app-manifest.yml`,
@@ -46,15 +50,14 @@ If a setting is missing, the bot stops and names it, e.g.
 
 ### 2. Start the bot
 
-```
+```bash
 python -m trustguard.adapters.slack_adapter
 ```
 
-It runs until you press Ctrl+C. No web address or firewall change is needed (Socket Mode).
+It runs until you press Ctrl+C. Socket Mode means the bot connects out to Slack, so you don't
+need a web address or a firewall change.
 
 ### 3. Test script
-
-Do these in Slack and tick each one off.
 
 | # | Do this | Expected |
 |---|---|---|
@@ -70,35 +73,40 @@ Do these in Slack and tick each one off.
 | 10 | Stop the bot (Ctrl+C), start it again, and repeat the rejoin from #9 | Still held, if `TRUSTGUARD_STATE_PATH` is set |
 | 11 | As admin, `!tg approve @userD`, then D rejoins | No alert |
 
-Slack limits to expect (by design, not bugs): the bot cannot read DMs between users (hence
-*Share message*), cannot delete other users' messages (an admin deletes from the alert), and
-cannot deactivate accounts (an admin does that in Slack admin).
-
----
+Some Slack limits are by design, not bugs. The bot can't read DMs between users (that's why
+*Share message* exists), can't delete other users' messages (an admin deletes from the alert),
+and can't deactivate accounts (an admin does that in Slack admin).
 
 ## Discord pilot
 
-### 1. Create the bot (you, ~5 minutes)
+### 1. Create the bot (you, about 5 minutes)
 
 1. Go to https://discord.com/developers/applications → **New Application** → name it `TrustGuard`.
-2. **Bot** tab → **Reset Token** → copy it into `trustguard\.env` as `DISCORD_TOKEN`. On the
+2. To keep the bot private, first open **Installation**, set **Install Link** to **None** and
+   untick **User Install**. Then turn **Public Bot** off on the **Bot** tab. In the other order,
+   saving fails with a validation error.
+3. **Bot** tab → **Reset Token** → copy it into `trustguard\.env` as `DISCORD_TOKEN`. On the
    same tab, turn on **Message Content Intent** and **Server Members Intent**.
-3. **OAuth2 → URL Generator**: tick the scope `bot`, then the permissions View Channels, Send
-   Messages, Read Message History, Manage Messages, Moderate Members and Manage Roles. Open
-   the generated URL and add the bot to your **test** server.
-4. In Discord: **User Settings → Advanced → Developer Mode** on. Create a private
-   `#trustguard-mods` channel, right-click it → **Copy Channel ID** → put it in `.env` as
-   `TRUSTGUARD_MOD_CHANNEL_ID`.
-5. Optional: create a role `held` with no channel access, drag it **below** the TrustGuard role,
-   copy its ID → `TRUSTGUARD_HOLD_ROLE_ID`.
+4. **OAuth2 → URL Generator**: tick the scope `bot`, then only the permissions View Channels,
+   Send Messages, Read Message History, Manage Messages, Moderate Members and Manage Roles. Don't
+   tick Administrator. Open the generated URL and add the bot to your **test** server.
+5. In Discord, switch on **User Settings → Advanced → Developer Mode**. Create a private
+   `#trustguard-mods` channel and add the bot to it (**Edit Channel → Permissions → Add members
+   or roles → TrustGuard**), or it can't post alerts there. Right-click the channel → **Copy
+   Channel ID** → put it in `.env` as `TRUSTGUARD_MOD_CHANNEL_ID`.
+6. Optional: create a role `held` with no channel access, drag it **below** the TrustGuard role,
+   and copy its ID into `.env` as `TRUSTGUARD_HOLD_ROLE_ID`.
 
 ### 2. Start the bot
 
-```
+```bash
 python -m trustguard.adapters.discord_adapter
 ```
 
-The terminal prints `TrustGuard connected as ...`.
+The terminal prints `TrustGuard connected as ...`. Then leave it alone: you type test messages
+in Discord, not in that terminal (anything typed there never reaches Discord). Pressing Ctrl+C
+or closing the terminal stops the bot. To DM the bot,
+press Ctrl+K in Discord, type `@TrustGuard` and open the DM.
 
 ### 3. Test script
 
@@ -114,12 +122,20 @@ The terminal prints `TrustGuard connected as ...`.
 | 8 | Ban a test user, then have them rejoin with a new account whose name resembles the old one | Held: "name resembles removed account" |
 | 9 | `!tg approve <id>` | Hold role removed |
 
-The bot cannot read DMs between users here either; forwarding to the bot is the DM-side signal.
+As on Slack, the bot can't read DMs between users; forwarding a message to it is how it hears
+about DM scams.
 
----
+**Testing with only your own account.** No bot can time out a server owner, so if you post as the
+owner the alert says "could not time out the sender". The message is still deleted. Tests that
+need a second person (two reporters, the kick, rejoining) can't be done with one account. The
+offline replay covers them; run it from the `trustguard` folder:
+
+```bash
+python -m trustguard.demo incident
+```
 
 ## After the pilot
 
-Delete the test tokens: Slack → **Basic Information → Revoke**; Discord → **Bot → Reset Token**.
-Then clear them from `trustguard\.env`. Note how many alerts were real and how many were false
-alarms. That is the first real measurement of the heuristics.
+Reset the test tokens so they stop working: Slack → **Basic Information → Revoke**; Discord →
+**Bot → Reset Token**. Then clear them from `trustguard\.env`. Note how many alerts were real and
+how many were false alarms. That's the first real measurement of how well the rules work.

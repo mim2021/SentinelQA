@@ -7,8 +7,9 @@ What a Discord bot can and cannot see (be precise about this in write-ups):
     incident is covered by reports: recipients forward the suspicious DM to the bot, and
     independent reports against one sender escalate to moderators.
 
-Required bot permissions: View Channels, Send Messages, Manage Messages (delete),
-Moderate Members (timeout), Manage Roles (hold role). Intents: Message Content, Server Members.
+Required bot permissions: View Channels, Send Messages, Read Message History (replies),
+Manage Messages (delete), Moderate Members (timeout), Manage Roles (hold role).
+Intents: Message Content, Server Members.
 
 Run:  python -m trustguard.adapters.discord_adapter
 Env:  DISCORD_TOKEN, TRUSTGUARD_MOD_CHANNEL_ID, TRUSTGUARD_HOLD_ROLE_ID (optional),
